@@ -219,8 +219,8 @@ class VoiceVolumeNormalizer {
     }
   }
 
-  // Update compressor parameters
-  updateParameters({ threshold, ratio, attack, release } = {}) {
+  // Update compressor parameters and band gains
+  updateParameters({ threshold, ratio, attack, release, lowBandGain, midBandGain, highBandGain } = {}) {
     if (!this.compressor) return;
 
     if (threshold !== undefined) {
@@ -235,6 +235,17 @@ class VoiceVolumeNormalizer {
     }
     if (release !== undefined) {
       this.compressor.release.value = release / 1000; // Convert ms to seconds
+    }
+
+    // Update band gains (convert dB to linear gain)
+    if (lowBandGain !== undefined && this.lowBandGain) {
+      this.lowBandGain.gain.value = Math.pow(10, lowBandGain / 20);
+    }
+    if (midBandGain !== undefined && this.midBandGain) {
+      this.midBandGain.gain.value = Math.pow(10, midBandGain / 20);
+    }
+    if (highBandGain !== undefined && this.highBandGain) {
+      this.highBandGain.gain.value = Math.pow(10, highBandGain / 20);
     }
   }
 

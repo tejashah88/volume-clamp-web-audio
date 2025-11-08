@@ -36,24 +36,28 @@
       }
       .meters-container {
         display: flex;
-        justify-content: space-around;
+        justify-content: center;
         align-items: flex-end;
-        gap: 30px;
+        gap: 15px;
+        flex-wrap: wrap;
       }
       .meter {
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 8px;
+        position: relative;
       }
       .meter label {
         font-weight: bold;
-        font-size: 0.9em;
+        font-size: 0.8em;
         margin-bottom: 0;
+        text-align: center;
+        min-width: 70px;
       }
       .meter-bar-container {
-        width: 40px;
-        height: 200px;
+        width: 35px;
+        height: 150px;
         background: #ddd;
         border-radius: 4px;
         position: relative;
@@ -69,11 +73,60 @@
         transition: height 0.05s ease-out;
       }
       .meter-value {
-        font-size: 0.85em;
-        font-family: monospace;
+        font-size: 0.75em;
+        font-family: 'Courier New', Courier, monospace;
         color: #555;
-        min-width: 60px;
+        min-width: 80px;
         text-align: center;
+        letter-spacing: 0;
+      }
+      .stage-separator {
+        display: flex;
+        align-items: center;
+        font-size: 1.5em;
+        color: #999;
+        margin: 0 5px;
+        padding-bottom: 60px;
+      }
+      .stage-group {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        padding: 0 10px;
+        background: #fafafa;
+        border-radius: 8px;
+      }
+      .compression-indicator {
+        font-size: 0.7em;
+        font-family: 'Courier New', Courier, monospace;
+        color: #e67e22;
+        font-weight: bold;
+        margin-top: 4px;
+        min-height: 16px;
+      }
+      .toggle-button {
+        padding: 12px 24px;
+        font-size: 1em;
+        font-weight: bold;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin: 15px 0;
+      }
+      .toggle-button.enabled {
+        background: #27ae60;
+        color: white;
+      }
+      .toggle-button.enabled:hover {
+        background: #229954;
+      }
+      .toggle-button.disabled {
+        background: #95a5a6;
+        color: white;
+      }
+      .toggle-button.disabled:hover {
+        background: #7f8c8d;
       }
     </style>
   </head>
@@ -91,8 +144,9 @@
     </audio>
 
     <div id="visualizer">
-      <h2>Audio Levels</h2>
+      <h2>Multi-Band Processing Pipeline</h2>
       <div class="meters-container">
+        <!-- Input Stage -->
         <div class="meter">
           <label>Input</label>
           <div class="meter-bar-container">
@@ -100,6 +154,51 @@
           </div>
           <span class="meter-value" id="inputValue">-∞ dB</span>
         </div>
+
+        <div class="stage-separator">→</div>
+
+        <!-- Frequency Band Split Stage -->
+        <div class="stage-group">
+          <div class="meter">
+            <label>Low<br/>&lt;300Hz</label>
+            <div class="meter-bar-container">
+              <div class="meter-bar" id="lowBandBar"></div>
+            </div>
+            <span class="meter-value" id="lowBandValue">-∞ dB</span>
+          </div>
+
+          <div class="meter">
+            <label>Mid<br/>300-3kHz</label>
+            <div class="meter-bar-container">
+              <div class="meter-bar" id="midBandBar"></div>
+            </div>
+            <span class="meter-value" id="midBandValue">-∞ dB</span>
+            <div class="compression-indicator" id="compressionIndicator"></div>
+          </div>
+
+          <div class="meter">
+            <label>High<br/>&gt;3kHz</label>
+            <div class="meter-bar-container">
+              <div class="meter-bar" id="highBandBar"></div>
+            </div>
+            <span class="meter-value" id="highBandValue">-∞ dB</span>
+          </div>
+        </div>
+
+        <div class="stage-separator">→</div>
+
+        <!-- Mixed Stage -->
+        <div class="meter">
+          <label>Mixed</label>
+          <div class="meter-bar-container">
+            <div class="meter-bar" id="mixedBar"></div>
+          </div>
+          <span class="meter-value" id="mixedValue">-∞ dB</span>
+        </div>
+
+        <div class="stage-separator">→</div>
+
+        <!-- Output Stage -->
         <div class="meter">
           <label>Output</label>
           <div class="meter-bar-container">
@@ -112,6 +211,11 @@
 
     <section>
       <h2>Main Control</h2>
+
+      <button id="toggleProcessing" class="toggle-button enabled">Processing: ON</button>
+      <p style="margin: 0 0 20px 0; color: #666; font-size: 0.9em;">
+        Toggle to compare processed vs. unprocessed audio (bypass mode).
+      </p>
 
       <h3>Volume Ceiling</h3>
       <label>
@@ -162,6 +266,40 @@
 
     </section>
 
+    <section>
+      <h2>Multi-Band Gain Adjustment</h2>
+      <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+        Adjust the volume of each frequency band independently. Use this to fine-tune the balance between low, mid, and high frequencies.
+      </p>
+
+      <label>
+        Low Band Gain (&lt;300Hz)
+        <input id="lowBandGain" type="range" min="-12" max="12" step="1" value="0" />
+        <span id="lowBandGainVal">0 dB</span>
+      </label>
+      <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9em;">
+        Adjust low frequencies (rumble, bass). Bypasses compression.
+      </p>
+
+      <label>
+        Mid Band Gain (300Hz - 3kHz)
+        <input id="midBandGain" type="range" min="-12" max="12" step="1" value="0" />
+        <span id="midBandGainVal">0 dB</span>
+      </label>
+      <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9em;">
+        Adjust voice frequencies (after compression and makeup gain).
+      </p>
+
+      <label>
+        High Band Gain (&gt;3kHz)
+        <input id="highBandGain" type="range" min="-12" max="12" step="1" value="0" />
+        <span id="highBandGainVal">0 dB</span>
+      </label>
+      <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9em;">
+        Adjust high frequencies (sibilance, clarity). Bypasses compression.
+      </p>
+    </section>
+
     <script src="src/audio-processor.js"></script>
     <script src="src/audio-visualizer.js"></script>
     <script>
@@ -174,8 +312,17 @@
       const processor = new VoiceVolumeNormalizer(-20);
       const visualizer = new AudioVisualizer(processor);
 
+      // Helper function to format dB values consistently (XXX.X dB)
+      function formatDb(db) {
+        if (db === -Infinity) return '  -∞ dB';
+        // Format as: sign + 3 digits + . + 1 decimal digit
+        // padStart ensures consistent width in monospace font
+        return db.toFixed(1).padStart(6) + ' dB';
+      }
+
       // UI elements
       const ui = {
+        toggleProcessing: document.getElementById("toggleProcessing"),
         threshold: document.getElementById("threshold"),
         ratio: document.getElementById("ratio"),
         attack: document.getElementById("attack"),
@@ -185,21 +332,61 @@
         attackVal: document.getElementById("attackVal"),
         releaseVal: document.getElementById("releaseVal"),
         reductionDisplay: document.getElementById("reductionDisplay"),
+        // Meter bars and values (6 stages)
         inputBar: document.getElementById("inputBar"),
         inputValue: document.getElementById("inputValue"),
+        lowBandBar: document.getElementById("lowBandBar"),
+        lowBandValue: document.getElementById("lowBandValue"),
+        midBandBar: document.getElementById("midBandBar"),
+        midBandValue: document.getElementById("midBandValue"),
+        highBandBar: document.getElementById("highBandBar"),
+        highBandValue: document.getElementById("highBandValue"),
+        mixedBar: document.getElementById("mixedBar"),
+        mixedValue: document.getElementById("mixedValue"),
         outputBar: document.getElementById("outputBar"),
         outputValue: document.getElementById("outputValue"),
+        compressionIndicator: document.getElementById("compressionIndicator"),
+        // Band gain controls
+        lowBandGain: document.getElementById("lowBandGain"),
+        lowBandGainVal: document.getElementById("lowBandGainVal"),
+        midBandGain: document.getElementById("midBandGain"),
+        midBandGainVal: document.getElementById("midBandGainVal"),
+        highBandGain: document.getElementById("highBandGain"),
+        highBandGainVal: document.getElementById("highBandGainVal"),
       };
 
       // Set up meter update callback
       visualizer.onMetersUpdate = (data) => {
         // Update input meter
         ui.inputBar.style.height = data.inputPercent + '%';
-        ui.inputValue.textContent = data.inputDb.toFixed(1) + ' dB';
+        ui.inputValue.textContent = formatDb(data.inputDb);
+
+        // Update low band meter
+        ui.lowBandBar.style.height = data.lowBandPercent + '%';
+        ui.lowBandValue.textContent = formatDb(data.lowBandDb);
+
+        // Update mid band meter
+        ui.midBandBar.style.height = data.midBandPercent + '%';
+        ui.midBandValue.textContent = formatDb(data.midBandDb);
+
+        // Update high band meter
+        ui.highBandBar.style.height = data.highBandPercent + '%';
+        ui.highBandValue.textContent = formatDb(data.highBandDb);
+
+        // Update mixed meter
+        ui.mixedBar.style.height = data.mixedPercent + '%';
+        ui.mixedValue.textContent = formatDb(data.mixedDb);
 
         // Update output meter
         ui.outputBar.style.height = data.outputPercent + '%';
-        ui.outputValue.textContent = data.outputDb.toFixed(1) + ' dB';
+        ui.outputValue.textContent = formatDb(data.outputDb);
+
+        // Update compression indicator
+        if (data.compressionDb !== undefined && data.compressionDb > 0.5) {
+          ui.compressionIndicator.textContent = 'Comp: -' + formatDb(data.compressionDb);
+        } else {
+          ui.compressionIndicator.textContent = '';
+        }
 
         // Update volume reduction percentage
         if (data.reductionPercent !== undefined) {
@@ -217,6 +404,30 @@
           visualizer.start();
         }
       });
+
+      // Toggle processing on/off
+      ui.toggleProcessing.onclick = () => {
+        if (!audioCtx || !sourceNode) {
+          alert("Please start playing audio first!");
+          return;
+        }
+
+        if (processor.isActive) {
+          // Disable processing (bypass mode)
+          processor.disable();
+          visualizer.stop();
+          ui.toggleProcessing.textContent = "Processing: OFF";
+          ui.toggleProcessing.classList.remove("enabled");
+          ui.toggleProcessing.classList.add("disabled");
+        } else {
+          // Enable processing
+          processor.enable(sourceNode, audioCtx.destination);
+          visualizer.start();
+          ui.toggleProcessing.textContent = "Processing: ON";
+          ui.toggleProcessing.classList.remove("disabled");
+          ui.toggleProcessing.classList.add("enabled");
+        }
+      };
 
       // Update ceiling threshold in real time
       ui.threshold.oninput = () => {
@@ -236,6 +447,23 @@
       ui.release.oninput = () => {
         processor.updateParameters({ release: parseFloat(ui.release.value) });
         ui.releaseVal.textContent = ui.release.value;
+      };
+
+      // Update band gain parameters in real time
+      ui.lowBandGain.oninput = () => {
+        const gainDb = parseFloat(ui.lowBandGain.value);
+        processor.updateParameters({ lowBandGain: gainDb });
+        ui.lowBandGainVal.textContent = gainDb.toFixed(0) + ' dB';
+      };
+      ui.midBandGain.oninput = () => {
+        const gainDb = parseFloat(ui.midBandGain.value);
+        processor.updateParameters({ midBandGain: gainDb });
+        ui.midBandGainVal.textContent = gainDb.toFixed(0) + ' dB';
+      };
+      ui.highBandGain.oninput = () => {
+        const gainDb = parseFloat(ui.highBandGain.value);
+        processor.updateParameters({ highBandGain: gainDb });
+        ui.highBandGainVal.textContent = gainDb.toFixed(0) + ' dB';
       };
     </script>
   </body>
