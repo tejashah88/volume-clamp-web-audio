@@ -21,7 +21,7 @@ The system uses **frequency-aware multi-band processing** to normalize voice vol
 
 ```
                     ┌─→ Low Band (< 300Hz) ─→ BYPASS ────┐
-Source (microphone) ├─→ Mid Band (300-3000Hz) ─→ COMPRESS ─┼─→ Mixer ─→ Analyser ─→ Hard Limiter ─→ Output
+Source (microphone) ├─→ Mid Band (300-3000Hz) ─→ COMPRESS ─┼─→ Mixer ─→ Limiter (Stage 1) ─→ Analyser ─→ Safety Limiter (Stage 2) ─→ Output
                     └─→ High Band (> 3000Hz) ─→ BYPASS ────┘
 ```
 
@@ -54,33 +54,53 @@ Per the Web Audio API specification, the compressor includes automatic makeup ga
 
 **Critical Insight**: Because only the mid band (300-3000Hz) is compressed, the makeup gain ONLY amplifies voice frequencies, not the full-spectrum noise. Low and high frequency noise remain at their original (quiet) levels.
 
-#### Stage 2: Band Mixing and Analysis
+#### Stage 2: Band Mixing
 
 After processing, the three bands are automatically mixed back together by the Web Audio API:
 - Low band: uncompressed (original level)
 - Mid band: compressed with makeup gain (normalized level)
 - High band: uncompressed (original level)
 
-**Critical Design Point**: The AnalyserNode measures the **combined output of all three bands** after mixing, not just the compressed mid band. This ensures the hard limiter (Stage 3) can respond to the true signal level, including any loud low-frequency rumble or high-frequency noise that bypassed compression.
-
 The result is natural-sounding voice with normalized volume, but without amplified background noise.
 
-#### Stage 3: Hard Limiter Gain
+#### Stage 3: Two-Stage Limiter (Hybrid Approach)
 
-Ensures the volume never exceeds the given threshold by continuously monitoring the **combined output** of all three bands and applying additional gain reduction if needed. This acts as a safety net even when loud signals are present in the low or high bands.
+The system uses a **two-stage limiting architecture** that combines smooth audio-rate processing with accurate hard ceiling enforcement:
 
-**Why This Matters**: If a user has loud low-frequency rumble (e.g., -10dB) passing through the low band uncompressed, but the mid band (voice) is compressed to -20dB, the combined signal could still exceed the threshold. The analyser measuring the mixed output ensures the limiter catches this and reduces gain appropriately.
+**Stage 3a: First-Stage Limiter (Smooth Compression)**
+
+A second `DynamicsCompressorNode` provides smooth limiting at audio rate (48kHz) for all bands combined:
+
+   - **Threshold**: -20 dB (same as mid-band compressor)
+   - **Knee**: 0 dB - Hard knee for brick-wall limiting
+   - **Ratio**: 20:1 - Very high ratio for aggressive limiting
+   - **Attack**: 3ms (0.003s) - Fast response to catch peaks
+   - **Release**: 50ms (0.05s) - Smooth release (faster than mid-band compressor for tighter control)
+
+**Why This Stage**: The DynamicsCompressor operates at audio rate (48,000 times per second), providing smooth gain changes without audible stepping artifacts. However, a 20:1 ratio cannot provide a true hard ceiling - if a signal is 10 dB over threshold, the output will still be 0.5 dB over (10 ÷ 20 = 0.5).
+
+**Stage 3b: Safety Limiter (Hard Ceiling)**
+
+A `GainNode` controlled by JavaScript provides a true hard ceiling, ensuring no signal exceeds the threshold:
 
    **AnalyserNode Configuration:**
-   - **FFT Size**: 2048 samples - The window size to analyze the audio samples.
-   - **Smoothing**: 0.3 - Applied smoothing that averages current measurement with previous values to reduce jitter. Range is from 0.0 to 1.0.
+   - **FFT Size**: 2048 samples - The window size to analyze the audio samples
+   - **Smoothing**: 0.3 - Applied smoothing to reduce measurement jitter
+   - Measures signal **after first-stage limiter** to catch any remaining peaks
 
-   **Computation Steps (runs every animation frame):**
-   1. **Sample Capture**: Retrieves time-domain samples from the compressor output
+   **Computation Steps (runs every animation frame at ~60Hz):**
+   1. **Sample Capture**: Retrieves time-domain samples from the first-stage limiter output
    2. **RMS Calculation**: Computes Root Mean Square for perceived loudness: `RMS = sqrt(Σ(sample²) / sample_count)`
    3. **dB Conversion**: Converts RMS to decibels: `dB = 20 × log₁₀(RMS)` (or -100 dB if RMS ≈ 0)
    4. **Threshold Check**: If `dB > threshold`:
       - Calculate required gain reduction: `gain_dB = threshold - current_dB`
       - Convert to linear gain: `gain = 10^(gain_dB / 20)`
-      - Apply to limiter gain node (reduces volume)
+      - Apply to safety limiter gain node (reduces volume to exact ceiling)
    5. **Pass-through**: If `dB ≤ threshold`, set gain to 1.0 (unity gain, no change)
+
+**Why Two Stages**: This hybrid approach provides:
+- **Smooth behavior** from the first-stage compressor (no 60Hz stepping artifacts)
+- **Accurate ceiling** from the safety limiter (true -20 dB hard limit)
+- **Best of both worlds**: The compressor handles 95%+ of the work smoothly at audio rate, while the safety limiter only activates when needed to enforce the exact ceiling
+
+**Critical Design Point**: The AnalyserNode measures the signal **after the first-stage limiter** and **before the safety limiter**, ensuring accurate detection of any peaks that exceed the threshold. This catches loud signals from any band (low-frequency rumble, mid-range voice, or high-frequency noise) that may have slipped through the first stage.

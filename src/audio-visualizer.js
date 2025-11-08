@@ -12,8 +12,13 @@ class AudioVisualizer {
     this.lowBandAnalyser = null;
     this.midBandAnalyser = null;
     this.highBandAnalyser = null;
-    this.mixedAnalyser = null; // Will reference processor.compressorAnalyser
+    this.mixedAnalyser = null; // Will reference processor.mixerAnalyser (after first-stage limiter)
     this.outputAnalyser = null;
+
+    // Diagnostic recording
+    this.isRecording = false;
+    this.recordingData = [];
+    this.recordingStartTime = null;
   }
 
   // Initialize analysers when processor is ready
@@ -40,8 +45,8 @@ class AudioVisualizer {
       smoothingTimeConstant: ANALYSER_SMOOTHING,
     });
 
-    // Reuse processor's analyser for mixed signal (already connected in processor)
-    this.mixedAnalyser = this.processor.compressorAnalyser;
+    // Reuse processor's analyser for mixed signal (already in main chain after first-stage limiter)
+    this.mixedAnalyser = this.processor.mixerAnalyser;
 
     // Create output analyser (taps final output)
     this.outputAnalyser = new AnalyserNode(this.processor.audioCtx, {
@@ -54,7 +59,7 @@ class AudioVisualizer {
     this.processor.lowBandGain.connect(this.lowBandAnalyser);
     this.processor.compressor.connect(this.midBandAnalyser);
     this.processor.highBandGain.connect(this.highBandAnalyser);
-    // mixedAnalyser already connected (it's the processor's compressorAnalyser)
+    // mixedAnalyser already in main chain (processor.mixerAnalyser)
     this.processor.limiterGain.connect(this.outputAnalyser);
   }
 
@@ -110,9 +115,6 @@ class AudioVisualizer {
     const mixedDb = 20 * Math.log10(mixedRMS || 1e-5);
     const outputDb = 20 * Math.log10(outputRMS || 1e-5);
 
-    // Update the hard limiter
-    this.processor.updateLimiter();
-
     // Calculate compression amount on mid band
     // Compare filtered mid-band input to compressed mid-band output
     // Note: This is an approximation since we're comparing input (full spectrum) to mid-band
@@ -143,6 +145,25 @@ class AudioVisualizer {
       });
     }
 
+    // Record diagnostic data if recording is enabled
+    if (this.isRecording && this.recordingStartTime !== null) {
+      const timestamp = performance.now() - this.recordingStartTime;
+      this.recordingData.push({
+        timestamp: timestamp.toFixed(2),
+        inputDb: inputDb.toFixed(2),
+        lowBandDb: lowBandDb.toFixed(2),
+        midBandDb: midBandDb.toFixed(2),
+        highBandDb: highBandDb.toFixed(2),
+        mixedDb: mixedDb.toFixed(2),
+        outputDb: outputDb.toFixed(2),
+        compressionDb: compressionDb.toFixed(2),
+        threshold: this.processor.threshold.toFixed(2),
+        limiterReduction: this.processor.limiterCompressor.reduction.toFixed(2),
+        limiterGain: this.processor.limiterGain.gain.value.toFixed(4),
+        aboveThreshold: mixedDb > this.processor.threshold
+      });
+    }
+
     this.animationId = requestAnimationFrame(() => this.updateMeters());
   }
 
@@ -155,7 +176,7 @@ class AudioVisualizer {
     this.processor.lowBandGain.connect(this.lowBandAnalyser);
     this.processor.compressor.connect(this.midBandAnalyser);
     this.processor.highBandGain.connect(this.highBandAnalyser);
-    // mixedAnalyser is already in the main chain (processor.compressorAnalyser)
+    // mixedAnalyser already in main chain (processor.mixerAnalyser)
     this.processor.limiterGain.connect(this.outputAnalyser);
   }
 
@@ -194,5 +215,59 @@ class AudioVisualizer {
         reductionPercent: 0,
       });
     }
+  }
+
+  // Start recording diagnostic data
+  startRecording() {
+    this.recordingData = [];
+    this.recordingStartTime = performance.now();
+    this.isRecording = true;
+    console.log('[Diagnostics] Recording started');
+  }
+
+  // Stop recording and return the collected data
+  stopRecording() {
+    this.isRecording = false;
+    console.log('[Diagnostics] Recording stopped. Captured', this.recordingData.length, 'samples');
+    return this.recordingData;
+  }
+
+  // Export recording data as downloadable CSV file
+  exportRecordingData(filename = 'audio-diagnostics.csv') {
+    const data = this.stopRecording();
+
+    if (data.length === 0) {
+      console.warn('[Diagnostics] No data to export');
+      return;
+    }
+
+    // Create CSV header from first data entry keys
+    const headers = Object.keys(data[0]);
+    const csvHeader = headers.join(',');
+
+    // Convert each data entry to CSV row
+    const csvRows = data.map(entry => {
+      return headers.map(header => {
+        const value = entry[header];
+        // Quote strings that contain commas
+        if (typeof value === 'string' && value.includes(',')) {
+          return `"${value}"`;
+        }
+        return value;
+      }).join(',');
+    });
+
+    // Combine header and rows
+    const csvContent = [csvHeader, ...csvRows].join('\n');
+
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+    console.log('[Diagnostics] Data exported to', filename);
   }
 }

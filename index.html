@@ -217,6 +217,15 @@
         Toggle to compare processed vs. unprocessed audio (bypass mode).
       </p>
 
+      <h3>Diagnostic Recording</h3>
+      <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+        <button id="stopRecording" class="toggle-button disabled" style="padding: 8px 16px;" disabled>Stop & Export CSV</button>
+        <span id="recordingStatus" style="font-size: 0.9em; color: #666;"></span>
+      </div>
+      <p style="margin: 0 0 20px 0; color: #666; font-size: 0.9em;">
+        Recording starts automatically when you play audio. Click "Stop & Export CSV" to download diagnostic data (volume levels, gain values, threshold crossings) for analysis. Data auto-saves when audio ends.
+      </p>
+
       <h3>Volume Ceiling</h3>
       <label>
         Maximum Volume (dB)
@@ -323,6 +332,8 @@
       // UI elements
       const ui = {
         toggleProcessing: document.getElementById("toggleProcessing"),
+        stopRecording: document.getElementById("stopRecording"),
+        recordingStatus: document.getElementById("recordingStatus"),
         threshold: document.getElementById("threshold"),
         ratio: document.getElementById("ratio"),
         attack: document.getElementById("attack"),
@@ -403,6 +414,32 @@
           processor.enable(sourceNode, audioCtx.destination);
           visualizer.start();
         }
+
+        // Auto-start diagnostic recording
+        if (!visualizer.isRecording) {
+          visualizer.startRecording();
+          ui.stopRecording.disabled = false;
+          ui.stopRecording.classList.remove("disabled");
+          ui.stopRecording.classList.add("enabled");
+          ui.recordingStatus.textContent = "🔴 Recording...";
+          ui.recordingStatus.style.color = "#e74c3c";
+        }
+      });
+
+      // Auto-save diagnostic data when audio ends
+      audioElt.addEventListener("ended", () => {
+        if (visualizer.isRecording) {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          visualizer.exportRecordingData(`audio-diagnostics-${timestamp}.csv`);
+          ui.stopRecording.disabled = true;
+          ui.stopRecording.classList.remove("enabled");
+          ui.stopRecording.classList.add("disabled");
+          ui.recordingStatus.textContent = "✓ Auto-saved on audio end";
+          ui.recordingStatus.style.color = "#27ae60";
+          setTimeout(() => {
+            ui.recordingStatus.textContent = "";
+          }, 5000);
+        }
       });
 
       // Toggle processing on/off
@@ -427,6 +464,20 @@
           ui.toggleProcessing.classList.remove("disabled");
           ui.toggleProcessing.classList.add("enabled");
         }
+      };
+
+      // Stop recording and export data
+      ui.stopRecording.onclick = () => {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        visualizer.exportRecordingData(`audio-diagnostics-${timestamp}.csv`);
+        ui.stopRecording.disabled = true;
+        ui.stopRecording.classList.remove("enabled");
+        ui.stopRecording.classList.add("disabled");
+        ui.recordingStatus.textContent = "✓ Data exported";
+        ui.recordingStatus.style.color = "#27ae60";
+        setTimeout(() => {
+          ui.recordingStatus.textContent = "";
+        }, 3000);
       };
 
       // Update ceiling threshold in real time
