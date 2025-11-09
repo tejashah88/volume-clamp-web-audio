@@ -1,3 +1,13 @@
+// Default constants
+const DEFAULT_THRESHOLD = -20;           // dB threshold
+const DEFAULT_ATTACK_TIME = 0.015;       // seconds (15ms) - smooth gain reduction
+const DEFAULT_RELEASE_TIME = 0.08;       // seconds (80ms) - balanced recovery speed
+const DEFAULT_RMS_WINDOW = 0.005;        // seconds (5ms) - fast level detection
+const DEFAULT_LOOKAHEAD_TIME = 0.010;    // seconds (10ms) - anticipatory limiting
+const DEFAULT_INITIAL_GAIN = 1.0;        // Unity gain at start
+const MAX_CHANNELS = 2;                  // Stereo support
+const MIN_DB_VALUE = -100;               // Minimum dB for logarithmic calculations
+
 /**
  * AudioWorklet processor for hard limiting with lookahead
  *
@@ -14,33 +24,31 @@ class LimiterProcessor extends AudioWorkletProcessor {
     super();
 
     // Limiter parameters
-    this.threshold = -20;           // dB threshold
-    this.currentGain = 1.0;         // Current gain value (attack/release smoothing)
+    this.threshold = DEFAULT_THRESHOLD;
+    this.currentGain = DEFAULT_INITIAL_GAIN;
 
     // Attack/Release time constants
-    // Attack: 15ms - smooth gain reduction to prevent distortion
-    // Release: 80ms - balanced recovery speed for natural speech
-    this.attackTime = 0.015;        // seconds (15ms)
-    this.releaseTime = 0.08;        // seconds (80ms)
+    this.attackTime = DEFAULT_ATTACK_TIME;
+    this.releaseTime = DEFAULT_RELEASE_TIME;
 
     // Calculate smoothing coefficients (exponential moving average)
     // Coefficient = 1 - e^(-1 / (time * sampleRate))
     this.attackCoeff = 1 - Math.exp(-1 / (this.attackTime * sampleRate));
     this.releaseCoeff = 1 - Math.exp(-1 / (this.releaseTime * sampleRate));
 
-    // RMS calculation with sliding window (5ms window for fast level detection)
-    this.rmsWindowSize = Math.floor(sampleRate * 0.005); // 5ms window
+    // RMS calculation with sliding window
+    this.rmsWindowSize = Math.floor(sampleRate * DEFAULT_RMS_WINDOW);
     this.rmsBuffer = new Float32Array(this.rmsWindowSize);
     this.rmsBufferIndex = 0;
     this.rmsSum = 0;
 
-    // Lookahead buffer for anticipatory limiting (10ms delay)
+    // Lookahead buffer for anticipatory limiting
     // Analyzes future audio before output to eliminate lag-based pumping
-    this.lookaheadTime = 0.010;  // 10ms lookahead
+    this.lookaheadTime = DEFAULT_LOOKAHEAD_TIME;
     this.lookaheadSize = Math.floor(sampleRate * this.lookaheadTime); // ~480 samples at 48kHz
 
     // Support up to 2 channels (stereo)
-    this.maxChannels = 2;
+    this.maxChannels = MAX_CHANNELS;
     this.lookaheadBuffers = [];
     this.lookaheadIndices = [];
     this.lookaheadFilled = [];
@@ -128,7 +136,7 @@ class LimiterProcessor extends AudioWorkletProcessor {
 
         // STEP 2: Analyze current sample (the "future" audio)
         const rms = this.calculateRMS(sample);
-        const db = rms > 0 ? 20 * Math.log10(rms) : -100;
+        const db = rms > 0 ? 20 * Math.log10(rms) : MIN_DB_VALUE;
 
         // Calculate target gain based on threshold
         let targetGain;
@@ -136,7 +144,7 @@ class LimiterProcessor extends AudioWorkletProcessor {
           const gainDb = this.threshold - db;
           targetGain = Math.pow(10, gainDb / 20);
         } else {
-          targetGain = 1.0; // Unity gain when below threshold
+          targetGain = DEFAULT_INITIAL_GAIN; // Unity gain when below threshold
         }
 
         // STEP 3: Smooth gain changes with attack/release envelope
