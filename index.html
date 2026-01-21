@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <title>Voice Volume Normalizer - AudioWorklet Hard Limiter</title>
+    <title>Volume Clamping - Custom AudioWorklet Demo</title>
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   </head>
@@ -62,7 +62,7 @@
 
     <!-- Main Content -->
     <div id="mainContent">
-      <h1>Voice Volume Normalizer - AudioWorklet Hard Limiter</h1>
+      <h1>Volume Clamping - Custom AudioWorklet Demo</h1>
 
       <audio controls>
         <source src="media/loud-test.mp3" type="audio/mpeg" />
@@ -109,7 +109,7 @@
       const visualizer = new AudioVisualizer(processor, audioElt);
 
       let processingEnabled = true; // Track processing state
-      let userThreshold = -20; // Store user's chosen threshold
+      let dbClampThreshold = -20; // Store user's chosen threshold
 
       function formatDb(db) {
         if (db === -Infinity) return '  -∞ dB';
@@ -224,7 +224,7 @@
         } else {
           // Turn ON - restore user's threshold
           processingEnabled = true;
-          processor.updateParameters({ threshold: userThreshold });
+          processor.updateParameters({ threshold: dbClampThreshold });
           ui.toggleProcessing.textContent = "Processing: ON";
           ui.toggleProcessing.classList.remove("disabled");
           ui.toggleProcessing.classList.add("enabled");
@@ -242,9 +242,9 @@
       };
 
       ui.threshold.oninput = () => {
-        userThreshold = parseFloat(ui.threshold.value);
+        dbClampThreshold = parseFloat(ui.threshold.value);
         if (processingEnabled) {
-          processor.updateParameters({ threshold: userThreshold });
+          processor.updateParameters({ threshold: dbClampThreshold });
         }
         ui.thresholdVal.textContent = ui.threshold.value;
       };
@@ -274,7 +274,7 @@
         ui.rmsWindow.value = 5;
         ui.rmsWindowVal.textContent = "5";
 
-        userThreshold = -20;
+        dbClampThreshold = -20;
 
         processor.updateParameters({
           threshold: processingEnabled ? -20 : 0,

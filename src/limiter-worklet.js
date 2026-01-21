@@ -9,15 +9,10 @@ const MAX_CHANNELS = 2;                  // Stereo support
 const MIN_DB_VALUE = -100;               // Minimum dB for logarithmic calculations
 
 /**
- * AudioWorklet processor for hard limiting with lookahead
- *
- * Architecture: RMS Detection → Attack/Release Smoothing → Lookahead Buffer → Output
- *
  * Key Features:
- * - 10ms lookahead buffer eliminates lag-based pumping
  * - Attack/release envelope prevents gain jitter
  * - No gain boost (unity gain when below threshold)
- * - Runs at audio rate (48kHz) for perfectly smooth operation
+ * - Runs at audio rate (48kHz)
  */
 class LimiterProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -45,7 +40,7 @@ class LimiterProcessor extends AudioWorkletProcessor {
     // Lookahead buffer for anticipatory limiting
     // Analyzes future audio before output to eliminate lag-based pumping
     this.lookaheadTime = DEFAULT_LOOKAHEAD_TIME;
-    this.lookaheadSize = Math.floor(sampleRate * this.lookaheadTime); // ~480 samples at 48kHz
+    this.lookaheadSize = Math.floor(sampleRate * this.lookaheadTime);
 
     // Support up to 2 channels (stereo)
     this.maxChannels = MAX_CHANNELS;
@@ -108,7 +103,6 @@ class LimiterProcessor extends AudioWorkletProcessor {
 
   /**
    * Main processing function - called for each 128-sample block
-   * Runs at audio rate (48000Hz / 128 = 375 times per second)
    */
   process(inputs, outputs, parameters) {
     const input = inputs[0];
