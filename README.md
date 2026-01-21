@@ -2,7 +2,7 @@
 
 This is a demo to showcase volume clamping, ensuring the output volume does not exceed a set decibel limit, by using a custom AudioWorklet. The original purpose was to implement an absolute volume clamper for proximity chat (via the BetterCrewLink app) in Among Us lobbies, notably to save your ears from loud voices from afar.
 
-Check out the demo here: https://tejashah88.github.io/voice-chat-volume-norm/
+Check out the demo here: https://tejashah88.github.io/volume-clamp-web-audio/
 
 ![Example View of Demo](docs/example.png)
 
